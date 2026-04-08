@@ -11,12 +11,15 @@ import Plan from './pages/Plan';
 import Cards from './pages/Cards';
 import Quiz from './pages/Quiz';
 import Prog from './pages/Prog';
+
+// ── Helper: safely extract a display name from any user/profile object ──
 function getSafeName(obj) {
     if (!obj) return '';
     const raw = obj.name || obj.displayName || obj.username || obj.email || '';
     if (typeof raw !== 'string') return String(raw || '');
     return raw.trim();
 }
+
 const TABS = [
     { id: 'dash', label: '🏠', title: 'Dashboard' },
     { id: 'files', label: '📁', title: 'Files' },
@@ -25,6 +28,7 @@ const TABS = [
     { id: 'quiz', label: '❓', title: 'Quiz' },
     { id: 'prog', label: '📊', title: 'Progress' },
 ];
+
 export default function App() {
     const [user, setUser] = useState(() => LS.get('sf_user'));
     const [profile, setProfile] = useState(() => LS.get('sf_profile'));
@@ -32,76 +36,124 @@ export default function App() {
     const [toast, setToast] = useState('');
     const [showProfile, setShowProfile] = useState(false);
     const [theme, setTheme] = useState(() => LS.get('sf_theme') || 'dark');
+
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : '');
         LS.set('sf_theme', theme);
     }, [theme]);
+
     const showToast = useCallback((msg) => {
         setToast(msg);
         setTimeout(() => setToast(''), 3000);
     }, []);
+
     function handleLogin(userData) {
         setUser(userData);
         LS.set('sf_user', userData);
         const safeName = getSafeName(userData);
         const existingProfile = LS.get('sf_profile');
-        const newProfile = { name: safeName || existingProfile?.name || 'User', avatar: existingProfile?.avatar || '🧑‍💻' };
+        const newProfile = {
+            name: safeName || existingProfile?.name || 'User',
+            avatar: existingProfile?.avatar || '🧑‍💻',
+        };
         setProfile(newProfile);
         LS.set('sf_profile', newProfile);
     }
+
     function handleLogout() {
         localStorage.removeItem('token');
         LS.set('sf_user', null);
         setUser(null);
         setProfile(null);
     }
+
     async function handleProfileSave(updates) {
         const newProfile = { ...profile, ...updates };
         setProfile(newProfile);
         LS.set('sf_profile', newProfile);
+
         if (updates.name) {
             const updatedUser = { ...user, name: updates.name };
             setUser(updatedUser);
             LS.set('sf_user', updatedUser);
         }
+
+        // FIX: backend profile update endpoint is /auth/me (not /api/profile)
         if (updates.name) {
-            try { await apiFetch('/api/profile', { name: updates.name }); } catch {}
+            try { await apiFetch('/auth/me', { name: updates.name }); } catch {
+                // Silently ignore — local update already applied
+            }
         }
+
         setShowProfile(false);
         showToast('Profile updated!');
     }
+
     if (!user || !localStorage.getItem('token')) {
         return <ApiKeyScreen onLogin={handleLogin} />;
     }
+
     const displayName = getSafeName(profile) || getSafeName(user) || 'User';
     const displayAvatar = (typeof profile?.avatar === 'string' && profile.avatar) ? profile.avatar : '🧑‍💻';
     const pageProps = { user, profile, showToast };
+
     return (
         <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', flexDirection: 'column' }}>
             <Toast msg={toast} />
-            <nav style={{ background: C.s, borderBottom: `1px solid ${C.b}`, padding: '0 16px', display: 'flex', alignItems: 'center', height: 56, position: 'sticky', top: 0, zIndex: 100, gap: 8 }}>
+
+            <nav style={{
+                background: C.s, borderBottom: `1px solid ${C.b}`,
+                padding: '0 16px', display: 'flex', alignItems: 'center',
+                height: 56, position: 'sticky', top: 0, zIndex: 100, gap: 8,
+            }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 'auto' }}>
                     <span style={{ fontSize: 22 }}>📚</span>
                     <span style={{ color: C.tx, fontWeight: 700, fontSize: 16 }}>StudyForge</span>
                 </div>
+
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                     {TABS.map(t => (
-                        <button key={t.id} onClick={() => setTab(t.id)} title={t.title} style={{ background: tab === t.id ? C.aD : 'transparent', color: tab === t.id ? C.a : C.mu, border: tab === t.id ? `1px solid ${C.a}33` : '1px solid transparent', borderRadius: 8, padding: '6px 10px', fontSize: 18, cursor: 'pointer', transition: 'all 0.15s' }}>
+                        <button key={t.id} onClick={() => setTab(t.id)} title={t.title} style={{
+                            background: tab === t.id ? C.aD : 'transparent',
+                            color: tab === t.id ? C.a : C.mu,
+                            border: tab === t.id ? `1px solid ${C.a}33` : '1px solid transparent',
+                            borderRadius: 8, padding: '6px 10px', fontSize: 18, cursor: 'pointer', transition: 'all 0.15s',
+                        }}>
                             {t.label}
                         </button>
                     ))}
                 </div>
-                <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Toggle theme" style={{ background: 'transparent', border: 'none', color: C.mu, fontSize: 18, cursor: 'pointer', padding: '6px 8px' }}>
+
+                <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} title="Toggle theme"
+                    style={{ background: 'transparent', border: 'none', color: C.mu, fontSize: 18, cursor: 'pointer', padding: '6px 8px' }}>
                     {theme === 'dark' ? '☀️' : '🌙'}
                 </button>
-                <button onClick={() => setShowProfile(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.s2, border: `1px solid ${C.b}`, borderRadius: 20, padding: '4px 12px 4px 4px', cursor: 'pointer', color: C.tx }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: C.aD, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: displayAvatar.startsWith('data:') ? 0 : 16, overflow: 'hidden', flexShrink: 0 }}>
-                        {displayAvatar.startsWith('data:') ? <img src={displayAvatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : displayAvatar}
+
+                <button onClick={() => setShowProfile(true)} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    background: C.s2, border: `1px solid ${C.b}`,
+                    borderRadius: 20, padding: '4px 12px 4px 4px', cursor: 'pointer', color: C.tx,
+                }}>
+                    <div style={{
+                        width: 28, height: 28, borderRadius: '50%', background: C.aD,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: displayAvatar.startsWith('data:') ? 0 : 16, overflow: 'hidden', flexShrink: 0,
+                    }}>
+                        {displayAvatar.startsWith('data:')
+                            ? <img src={displayAvatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : displayAvatar}
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 600, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {displayName}
+                    </span>
                 </button>
-                <button onClick={handleLogout} title="Logout" style={{ background: 'transparent', border: 'none', color: C.mu, fontSize: 18, cursor: 'pointer', padding: '6px 8px' }}>🚪</button>
+
+                <button onClick={handleLogout} title="Logout"
+                    style={{ background: 'transparent', border: 'none', color: C.mu, fontSize: 18, cursor: 'pointer', padding: '6px 8px' }}>
+                    🚪
+                </button>
             </nav>
+
             <main style={{ flex: 1, padding: '20px 16px', maxWidth: 900, margin: '0 auto', width: '100%' }}>
                 {tab === 'dash' && <Dash {...pageProps} onTabChange={setTab} />}
                 {tab === 'files' && <Files {...pageProps} />}
@@ -110,7 +162,14 @@ export default function App() {
                 {tab === 'quiz' && <Quiz {...pageProps} />}
                 {tab === 'prog' && <Prog {...pageProps} />}
             </main>
-            {showProfile && (<ProfileModal profile={{ name: displayName, avatar: displayAvatar }} onSave={handleProfileSave} onClose={() => setShowProfile(false)} />)}
+
+            {showProfile && (
+                <ProfileModal
+                    profile={{ name: displayName, avatar: displayAvatar }}
+                    onSave={handleProfileSave}
+                    onClose={() => setShowProfile(false)}
+                />
+            )}
         </div>
     );
 }
