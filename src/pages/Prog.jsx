@@ -3,49 +3,52 @@ import { C, card, btn } from '../theme';
 import { LS } from '../utils/storage';
 import { apiFetch } from '../utils/ai';
 
+
 export default function Prog({ showToast }) {
-    const [stats, setStats] = useState(null);
+    const [backendStats, setBackendStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [quizHistory, setQuizHistory] = useState(() => LS.get('sf_quiz_history', []));
 
+
     useEffect(() => { loadStats(); }, []);
+
 
     async function loadStats() {
         setLoading(true);
         try {
-            // FIX: correct endpoint is /api/stats (not /api/progress)
             const data = await apiFetch('/api/stats');
-            setStats(data);
+            setBackendStats(data?.stats || null);
         } catch {
-            const cards = LS.get('sf_cards', []);
-            setStats({
-                totalCards: cards.length,
-                dueCards: cards.filter(c => !c.due || new Date(c.due) <= new Date()).length,
-                masteredCards: cards.filter(c => c.reps >= 3 && c.ef >= 2.5).length,
-                streak: LS.get('sf_streak', 0),
-            });
+            setBackendStats(null);
         } finally { setLoading(false); }
     }
 
+
     const cards = LS.get('sf_cards', []);
-    const totalCards = stats?.totalCards ?? cards.length;
-    const masteredCards = stats?.masteredCards ?? cards.filter(c => c.reps >= 3).length;
+    const totalCards = cards.length;
+    const masteredCards = cards.filter(c => c.reps >= 3 && c.ef >= 2.5).length;
     const masteryPct = totalCards > 0 ? Math.round((masteredCards / totalCards) * 100) : 0;
     const avgQuizScore = quizHistory.length > 0
         ? Math.round(quizHistory.reduce((sum, q) => sum + (q.score / q.total) * 100, 0) / quizHistory.length)
         : 0;
 
+    const totalSessions = backendStats?.totalSessions ?? 0;
+    const completedDays = backendStats?.completedStudyDays ?? 0;
+
+
     function clearHistory() { LS.set('sf_quiz_history', []); setQuizHistory([]); showToast('Quiz history cleared.'); }
+
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <h2 style={{ color: C.tx, fontSize: 20, fontWeight: 700 }}>📊 Progress</h2>
 
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
                 {[
                     { label: 'Total Cards', value: loading ? '...' : totalCards, icon: '🃏', color: C.a },
                     { label: 'Mastered', value: loading ? '...' : masteredCards, icon: '✅', color: C.gr },
-                    { label: 'Day Streak', value: loading ? '...' : (stats?.streak ?? 0), icon: '🔥', color: C.pu },
+                    { label: 'Sessions', value: loading ? '...' : totalSessions, icon: '📖', color: C.pu },
                     { label: 'Avg Quiz', value: loading ? '...' : `${avgQuizScore}%`, icon: '❓', color: C.bl },
                 ].map(s => (
                     <div key={s.label} style={{ ...card(), textAlign: 'center' }}>
@@ -55,6 +58,7 @@ export default function Prog({ showToast }) {
                     </div>
                 ))}
             </div>
+
 
             {totalCards > 0 && (
                 <div style={card()}>
@@ -68,6 +72,16 @@ export default function Prog({ showToast }) {
                     <div style={{ color: C.mu, fontSize: 12, marginTop: 8 }}>{masteredCards} of {totalCards} cards mastered</div>
                 </div>
             )}
+
+
+            {completedDays > 0 && (
+                <div style={{ ...card(), borderLeft: `3px solid ${C.pu}` }}>
+                    <h3 style={{ color: C.tx, fontSize: 15, fontWeight: 700, marginBottom: 6 }}>🔥 Study Days Completed</h3>
+                    <div style={{ color: C.pu, fontSize: 28, fontWeight: 700 }}>{completedDays}</div>
+                    <div style={{ color: C.mu, fontSize: 12 }}>days marked complete in your study plan</div>
+                </div>
+            )}
+
 
             <div style={card()}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
@@ -95,6 +109,7 @@ export default function Prog({ showToast }) {
                     <div style={{ textAlign: 'center', color: C.mu, padding: 24 }}>No quiz history yet. Take a quiz to see your results here!</div>
                 )}
             </div>
+
 
             {cards.length > 0 && (() => {
                 const byCourse = cards.reduce((acc, c) => { const course = c.course || 'Uncategorised'; acc[course] = (acc[course] || 0) + 1; return acc; }, {});
